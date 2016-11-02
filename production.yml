@@ -1,0 +1,129 @@
+## Defined that this is version 2 type of docker-compose.yml
+
+version: '2'
+networks:
+  default:
+   external:
+     name: bridge
+services:
+
+
+## This will start rabbitmq container with required variables
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      - RABBITMQ_NODENAME=rabbitmq
+    restart: always
+    ports:
+      - 15672:15672
+    network_mode: bridge
+   
+## This will start crawler-framework with required variables
+
+  crawler-framework:
+    image: gitlab.serendio.com:4567/serendio/bigstream:framework
+    links:
+      - rabbitmq:rabbitmq
+      - elasticsearch:elasticsearch
+      - logstash:logstash
+
+    container_name: crawler-framework
+    depends_on:
+      - elasticsearch
+      - rabbitmq
+    environment: 
+      - mysql_host=10.1.101.1
+      - mysql_user=bigstream
+      - mysql_password=Bigstream_Serendio
+      - mysql_database=bigstream
+      - rabbitmq_host=rabbitmq
+      - es_host=elasticsearch
+      - es_port=9200
+      - es_index=crawler_datastore
+      - es_doc_type=crawled
+    command: --runapp
+    restart: always
+    network_mode: bridge
+
+ 
+## This will start crawler-ui with required varibles
+
+  crawler-ui:
+    image: gitlab.serendio.com:4567/serendio/bigstream:ui
+    ports: 
+      - 8090:80
+    container_name: crawler-ui
+    command: --runapp
+    depends_on:
+      - crawler-framework
+    links:
+      - crawler-framework:crawler-framework
+      - kibana:kibana
+      - logstash:logstash
+    volumes:
+      - /opt/bigstrem-cron:/var/www/html/cron
+    environment:
+      - mysql_host=10.1.101.1
+      - mysql_user=bigstream
+      - mysql_password=Bigstream_Serendio
+      - mysql_database=bigstream
+      - kibana_url=10.1.101.1:5601
+
+    restart: always
+    network_mode: bridge
+
+## This will start elasticsearch with required varibles
+
+
+  elasticsearch:
+    image: elasticsearch:2.3
+    container_name: elasticsearch
+    restart: always
+    volumes:
+      - /opt/elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    network_mode: bridge
+
+
+## This will start logstash with required varibles
+
+
+  logstash:
+    image: logstash:2.3
+    container_name: logstash
+    links:
+      - elasticsearch
+    restart: always
+    depends_on:
+      - elasticsearch
+    command: logstash -f /etc/logstash/
+    volumes:
+      - /etc/conf.d/logstash:/etc/logstash
+      - /etc/conf.d/collectd:/etc/collectd
+      - /etc/conf.d/patterns:/etc/patterns
+
+    ports:
+      - 25826:25826/udp
+      - 5044:5044
+      - 3456:3456
+    network_mode: bridge
+
+## This will start kibana with required varibles
+
+  kibana:
+    image: kibana:4.5
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    links:
+      - elasticsearch
+    depends_on:
+      - elasticsearch
+    restart: always
+    network_mode: bridge
+
+
+
